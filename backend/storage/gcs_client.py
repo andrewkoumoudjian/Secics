@@ -1,3 +1,152 @@
+"""
+Google Cloud Storage client for storing and retrieving SEC filing analyses.
+Handles storing raw filings, analyses, and managing data lifecycle.
+"""
+import os
+import logging
+import json
+from datetime import datetime
+from typing import Dict, List, Optional, Any, Union
+import asyncio
+
+from google.cloud import storage
+from google.cloud.exceptions import NotFound
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+class GCSClient:
+    """Client for interacting with Google Cloud Storage."""
+    
+    # Default bucket names
+    DEFAULT_BUCKETS = {
+        "raw_filings": "sec-insights-raw-filings",
+        "analyses": "sec-insights-analyses",
+        "events": "sec-insights-events",
+        "entities": "sec-insights-entities",
+        "links": "sec-insights-links",
+    }
+    
+    def __init__(self, 
+                 project_id: Optional[str] = None,
+                 bucket_prefix: Optional[str] = None,
+                 credential_path: Optional[str] = None):
+        """
+        Initialize the GCS client.
+        
+        Args:
+            project_id: Google Cloud project ID
+            bucket_prefix: Optional prefix for bucket names
+            credential_path: Path to service account key file
+        """
+        # Set up credentials if provided
+        if credential_path:
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credential_path
+        
+        self.project_id = project_id or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if not self.project_id:
+            logger.warning("No Google Cloud project ID provided. Using default.")
+            self.project_id = "sec-insights-project"
+        
+        # Initialize storage client
+        self.storage_client = storage.Client(project=self.project_id)
+        
+        # Set up bucket names with optional prefix
+        self.buckets = {}
+        prefix = f"{bucket_prefix}-" if bucket_prefix else ""
+        for key, value in self.DEFAULT_BUCKETS.items():
+            self.buckets[key] = f"{prefix}{value}"
+        
+        # Create buckets if needed
+        self._ensure_buckets_exist()
+    
+    def _ensure_buckets_exist(self):
+        """Ensure all required buckets exist."""
+        for bucket_type, bucket_name in self.buckets.items():
+            try:
+                self.storage_client.get_bucket(bucket_name)
+                logger.info(f"Bucket {bucket_name} exists.")
+            except NotFound:
+                logger.info(f"Creating bucket {bucket_name}...")
+                try:
+                    self.storage_client.create_bucket(bucket_name)
+                    logger.info(f"Bucket {bucket_name} created.")
+                except Exception as e:
+                    logger.error(f"Error creating bucket {bucket_name}: {str(e)}")
+    
+    def store_raw_filing(self, filing_id: str, content: str, metadata: Dict[str, Any]) -> bool:
+        """
+        Store a raw SEC filing.
+        
+        Args:
+            filing_id: Filing accession number
+            content: Raw filing content
+            metadata: Filing metadata
+            
+        Returns:
+            bool: Success status
+        """
+        try:
+            # Get raw filings bucket
+            bucket = self.storage_client.get_bucket(self.buckets["raw_filings"])
+            
+            # Store content
+            formatted_id = filing_id.replace("-", "")
+            content_blob = bucket.blob(f"{formatted_id}/content.txt")
+            content_blob.upload_from_string(content)
+            
+            # Store metadata
+            metadata_blob = bucket.blob(f"{formatted_id}/metadata.json")
+            metadata_blob.upload_from_string(json.dumps(metadata, indent=2))
+            
+            logger.info(f"Successfully stored raw filing {filing_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error storing raw filing {filing_id}: {str(e)}")
+            return False
+    
+    def store_analysis(self, filing_id: str, analysis_data: Dict[str, Any]) -> bool:
+        """
+        Store analysis results for a filing.
+        
+        Args:
+            filing_id: Filing accession number
+            analysis_data: Analysis results
+            
+        Returns:
+            bool: Success status
+        """
+        try:
+            # Get analyses bucket
+            bucket = self.storage_client.get_bucket(self.buckets["analyses"])
+            
+            # Store analysis
+            formatted_id = filing_id.replace("-", "")
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            blob_name = f"{formatted_id}/{timestamp}_analysis.json"
+            
+            blob = bucket.blob(blob_name)
+            blob.upload_from_string(json.dumps(analysis_data, indent=2))
+            
+            # Also store latest version with fixed name
+            latest_blob = bucket.blob(f"{formatted_id}/latest_analysis.json")
+            latest_blob.upload_from_string(json.dumps(analysis_data, indent=2))
+            
+            logger.info(f"Successfully stored analysis for filing {filing_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error storing analysis for filing {filing_id}: {str(e)}")
+            return False
+    
+    def store_events(self, filing_id: str, events_data: Dict[str, Any]) -> bool:
+        """
+        Store detected events for a filing.
+        
+        Args:
             filing_id: Filing accession number
             events_data: Events detection results
             
