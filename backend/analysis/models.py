@@ -24,10 +24,10 @@ class ModelClient:
     
     # Default models to use
     DEFAULT_MODELS = {
-        "default": "mistralai/mistral-7b-instruct",
-        "analysis": "anthropic/claude-instant-v1",
-        "summarization": "google/gemini-pro",
-        "classification": "mistralai/mistral-7b-instruct"
+        "default": "mistralai/mistral-7b-instruct:free",
+        "analysis": "microsoft/phi-3-medium-128k-instruct:free",
+        "summarization": "google/gemini-2.0-pro-exp-02-05:free",
+        "classification": "mistralai/mistral-7b-instruct:free"
     }
     
     def __init__(self, api_key: Optional[str] = None):
