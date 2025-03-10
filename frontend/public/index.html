@@ -1,0 +1,250 @@
+# Create index.html in the public folder
+cat > public/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="SEC Insights - SEC filings analytics dashboard" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <title>SEC Insights</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+EOF
+
+# Create manifest.json
+cat > public/manifest.json << 'EOF'
+{
+  "short_name": "SEC Insights",
+  "name": "SEC Insights Analytics",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}
+EOF
+
+# Create index.js
+cat > src/index.js << 'EOF'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './styles/index.css';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+EOF
+
+# Create App.js
+cat > src/App.js << 'EOF'
+import React, { useState, useEffect } from 'react';
+import './styles/App.css';
+
+function App() {
+  const [filings, setFilings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    async function fetchFilings() {
+      try {
+        // Replace with your actual API URL when deployed
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+        const response = await fetch(`${apiUrl}/filings`);
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setFilings(data.filings || []);
+      } catch (err) {
+        setError(err.message);
+        console.error("Error fetching filings:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchFilings();
+  }, []);
+
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>SEC Insights Dashboard</h1>
+      </header>
+      
+      <main>
+        {loading && <p>Loading SEC filings...</p>}
+        
+        {error && <p className="error">Error: {error}</p>}
+        
+        {!loading && !error && filings.length === 0 && (
+          <p>No filings found. Try adjusting your search criteria.</p>
+        )}
+        
+        {filings.length > 0 && (
+          <div className="filings-list">
+            <h2>Recent Filings</h2>
+            {filings.map(filing => (
+              <div key={filing.filing_id} className="filing-card">
+                <h3>{filing.company_name}</h3>
+                <p><strong>Type:</strong> {filing.filing_type}</p>
+                <p><strong>Date:</strong> {filing.filing_date}</p>
+                {filing.summary && <p>{filing.summary}</p>}
+                
+                {filing.events && filing.events.length > 0 && (
+                  <div className="events">
+                    <h4>Key Events:</h4>
+                    <ul>
+                      {filing.events.map((event, index) => (
+                        <li key={index}>
+                          <span className="event-category">{event.category}</span>: {event.description}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                <a href={filing.url} target="_blank" rel="noopener noreferrer">View Filing</a>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;
+EOF
+
+# Create CSS files
+mkdir -p src/styles
+cat > src/styles/App.css << 'EOF'
+.App {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.App-header {
+  margin-bottom: 32px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 16px;
+}
+
+.filing-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  transition: box-shadow 0.3s ease;
+}
+
+.filing-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.filing-card h3 {
+  margin-top: 0;
+  color: #2196F3;
+}
+
+.event-category {
+  background: #e3f2fd;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: #1976d2;
+}
+
+.events {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed #e0e0e0;
+}
+
+.error {
+  color: #d32f2f;
+  padding: 16px;
+  background: #ffebee;
+  border-radius: 4px;
+}
+EOF
+
+cat > src/styles/index.css << 'EOF'
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+a {
+  color: #2196F3;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  background: #2196F3;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1976d2;
+}
+EOF
+
+# Create .gitignore
+cat > .gitignore << 'EOF'
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+EOF
